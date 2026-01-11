@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>업무흐름 체크카드</title>
+  <link rel="icon" href="/static/favicon.ico" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .topbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 14px}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:220px}
+    .field label{font-size:.95rem;color:#444}
+    .pill{display:inline-block;padding:6px 10px;border:1px solid #d1d5db;border-radius:999px;background:#f9fafb;font-size:.95rem;color:#111;white-space:nowrap}
+    .tagbox{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+    .tagbtn{padding:6px 10px;border-radius:999px;border:1px solid #e5e7eb;background:#fafafa;cursor:pointer;font-size:.92rem}
+    .tagbtn.active{border-color:#111;background:#111;color:#fff}
+    details{border:1px solid #e5e5e5;border-radius:12px;background:#fff;margin:12px 0;overflow:hidden}
+    summary{padding:14px 16px;cursor:pointer;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    .title{font-weight:900;color:#111}
+    .meta{color:#666;font-size:.95rem}
+    .body{padding:0 16px 16px}
+    .chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+    .chip{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #e5e7eb;background:#fafafa;font-size:.85rem;color:#333}
+    .grid2{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+    .box{border:1px solid #e5e7eb;border-radius:12px;background:#fafafa;padding:12px 12px}
+    .box h3{margin:0 0 8px;font-size:1.05rem}
+    .box ul{margin:0;padding-left:18px}
+    .box li{margin:6px 0}
+    .btn-mini{padding:7px 12px;border-radius:10px;border:1px solid #222;background:#fff;font-weight:800;cursor:pointer}
+    .btn-mini:hover{background:#f3f4f6}
+  </style>
+</head>
+
+<body>
+<main class="container" style="max-width:880px; margin:0 auto; padding:24px 16px;">
+  <h1>업무흐름 체크카드</h1>
+  <p class="muted">·처리순서/필수증빙/자주 터지는 오류/반려 사유를 카드로 고정. (로컬 저장 0)</p>
+
+  <div class="topbar">
+    <a class="btn" href="/">메인</a>
+    <a class="btn" href="/dashboard/">대시보드</a>
+    <a class="btn" href="/routines/">월말·분기 루틴</a>
+  </div>
+
+  <section class="section">
+    <h2 class="local-h2" style="margin:0 0 10px;">검색/필터</h2>
+
+    <div class="toolbar">
+      <div class="field">
+        <label>검색</label>
+        <input id="q" type="text" placeholder="예: 수납, 원천세, 증빙, 반려..." />
+      </div>
+
+      <div class="field">
+        <label>영역(도메인)</label>
+        <select id="domain">
+          <option value="">전체</option>
+        </select>
+      </div>
+
+      <div class="field" style="min-width:auto;">
+        <label>&nbsp;</label>
+        <button class="btn" id="resetBtn" type="button">초기화</button>
+      </div>
+    </div>
+
+    <div class="tagbox" id="tagbox"></div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+      <span class="pill" id="countPill">0건</span>
+      <span class="pill">데이터: <span style="font-weight:900">/data/flows/flows.json</span></span>
+      <span class="pill" id="updatedPill">updated: -</span>
+    </div>
+  </section>
+
+  <div id="list"></div>
+
+  <footer class="site-footer" style="text-align:center;">
+    제작·운영: 씩씩하고 귀여운 고주무관 · 개인 전용
+  </footer>
+</main>
+
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#39;");
+  }
+  function norm(s){ return String(s||"").trim().toLowerCase(); }
+
+  let RAW = { updated:"-", cards:[] };
+  let ACTIVE_TAG = "";
+  let TAGS = [];
+  let DOMAINS = [];
+
+  function collectMeta(){
+    const t = new Set();
+    const d = new Set();
+    for(const c of RAW.cards){
+      if(c.domain) d.add(String(c.domain));
+      (Array.isArray(c.tags)?c.tags:[]).forEach(x=>t.add(String(x)));
+    }
+    TAGS = [...t].sort((a,b)=>a.localeCompare(b,"ko"));
+    DOMAINS = [...d].sort((a,b)=>a.localeCompare(b,"ko"));
+  }
+
+  function renderDomains(){
+    const sel = $("domain");
+    sel.innerHTML = `<option value="">전체</option>` + DOMAINS
+      .map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("");
+  }
+
+  function renderTags(){
+    const box = $("tagbox");
+    if(!TAGS.length){
+      box.innerHTML = `<span class="muted">태그 없음</span>`;
+      return;
+    }
+    const btn = (t)=>`
+      <button type="button" class="tagbtn ${ACTIVE_TAG===t?"active":""}" data-tag="${escapeHtml(t)}">
+        #${escapeHtml(t)}
+      </button>
+    `;
+    box.innerHTML =
+      `<button type="button" class="tagbtn ${ACTIVE_TAG===""?"active":""}" data-tag="">전체</button>` +
+      TAGS.map(btn).join("");
+
+    box.querySelectorAll("button[data-tag]").forEach(b=>{
+      b.addEventListener("click",()=>{
+        ACTIVE_TAG = b.getAttribute("data-tag") || "";
+        renderTags();
+        renderList();
+      });
+    });
+  }
+
+  function matchCard(c){
+    const q = norm($("q").value);
+    const dom = $("domain").value;
+
+    if(dom && String(c.domain||"") !== dom) return false;
+
+    if(ACTIVE_TAG){
+      const tags = Array.isArray(c.tags)?c.tags:[];
+      if(!tags.includes(ACTIVE_TAG)) return false;
+    }
+
+    if(!q) return true;
+
+    const hay = [
+      c.title, c.domain, c.when,
+      ...(Array.isArray(c.tags)?c.tags:[]),
+      ...(Array.isArray(c.steps)?c.steps:[]),
+      ...(Array.isArray(c.must)?c.must:[]),
+      ...(Array.isArray(c.commonIssues)?c.commonIssues:[]),
+      ...(Array.isArray(c.rejectReasons)?c.rejectReasons:[])
+    ].map(norm).join(" ");
+    return hay.includes(q);
+  }
+
+  function renderList(){
+    const list = $("list");
+    const arr = RAW.cards.filter(matchCard);
+
+    $("countPill").innerHTML = `<b>${arr.length}</b>건`;
+
+    if(!arr.length){
+      list.innerHTML = `<div class="card"><p class="muted">조건에 해당하는 카드가 없습니다.</p></div>`;
+      return;
+    }
+
+    list.innerHTML = arr.map(c=>{
+      const chips =
+        `<span class="chip">도메인:${escapeHtml(c.domain||"-")}</span>` +
+        (Array.isArray(c.tags)?c.tags:[]).map(t=>`<span class="chip">#${escapeHtml(t)}</span>`).join("");
+
+      const steps = (Array.isArray(c.steps)?c.steps:[]).map(x=>`<li>${escapeHtml(x)}</li>`).join("");
+      const must = (Array.isArray(c.must)?c.must:[]).map(x=>`<li>${escapeHtml(x)}</li>`).join("");
+      const issues = (Array.isArray(c.commonIssues)?c.commonIssues:[]).map(x=>`<li>${escapeHtml(x)}</li>`).join("");
+      const rejects = (Array.isArray(c.rejectReasons)?c.rejectReasons:[]).map(x=>`<li>${escapeHtml(x)}</li>`).join("");
+
+      const links = (Array.isArray(c.links)?c.links:[]);
+      const linkHtml = links.length ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          ${links.map(u=>`<a class="btn-mini" href="${escapeHtml(u)}" target="_blank" rel="noopener">참고 링크</a>`).join("")}
+        </div>
+      ` : "";
+
+      return `
+        <details>
+          <summary>
+            <div>
+              <div class="title">${escapeHtml(c.title||"(제목없음)")}</div>
+              <div class="meta">${escapeHtml(c.id||"")} · ${escapeHtml(c.when||"")}</div>
+            </div>
+            <button class="btn-mini" type="button" data-copy="${escapeHtml((c.steps||[]).join("\\n"))}">Steps 복사</button>
+          </summary>
+
+          <div class="body">
+            <div class="chips">${chips}</div>
+
+            <div class="grid2">
+              <div class="box">
+                <h3>처리 순서</h3>
+                <ul>${steps}</ul>
+              </div>
+
+              <div class="box">
+                <h3>필수 증빙</h3>
+                <ul>${must || "<li>없음</li>"}</ul>
+              </div>
+
+              <div class="box">
+                <h3>자주 터지는 오류</h3>
+                <ul>${issues || "<li>없음</li>"}</ul>
+              </div>
+
+              <div class="box">
+                <h3>반려 사유(자주)</h3>
+                <ul>${rejects || "<li>없음</li>"}</ul>
+              </div>
+            </div>
+
+            ${linkHtml}
+          </div>
+        </details>
+      `;
+    }).join("");
+
+    // summary 안 버튼 클릭시 details 토글 방지
+    list.querySelectorAll("button[data-copy]").forEach(b=>{
+      b.addEventListener("click", async (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        const txt = b.getAttribute("data-copy") || "";
+        try{
+          await navigator.clipboard.writeText(txt);
+          b.textContent = "복사됨";
+          setTimeout(()=>b.textContent="Steps 복사", 900);
+        }catch(e2){
+          alert("클립보드 복사 실패: 브라우저 권한을 확인하세요.");
+        }
+      });
+    });
+  }
+
+  async function init(){
+    try{
+      const r = await fetch("/data/flows/flows.json");
+      if(r.ok) RAW = await r.json();
+    }catch(e){}
+
+    RAW.cards = Array.isArray(RAW.cards) ? RAW.cards : [];
+    $("updatedPill").textContent = `updated: ${RAW.updated || "-"}`;
+
+    collectMeta();
+    renderDomains();
+    renderTags();
+    renderList();
+  }
+
+  $("q").addEventListener("input", renderList);
+  $("domain").addEventListener("change", renderList);
+  $("resetBtn").addEventListener("click", ()=>{
+    $("q").value = "";
+    $("domain").value = "";
+    ACTIVE_TAG = "";
+    renderTags();
+    renderList();
+  });
+
+  init();
+})();
+</script>
+
+<script src="/static/disable-copy.js"></script>
+<script src="/static/global-loader.js?v=1"></script>
+</body>
+</html>

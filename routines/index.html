@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>월말·분기말 루틴 체크리스트</title>
+  <link rel="icon" href="/static/favicon.ico" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .topbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 14px}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:220px}
+    .field label{font-size:.95rem;color:#444}
+    .pill{display:inline-block;padding:6px 10px;border:1px solid #d1d5db;border-radius:999px;background:#f9fafb;font-size:.95rem;color:#111;white-space:nowrap}
+    .tagbox{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+    .tagbtn{padding:6px 10px;border-radius:999px;border:1px solid #e5e7eb;background:#fafafa;cursor:pointer;font-size:.92rem}
+    .tagbtn.active{border-color:#111;background:#111;color:#fff}
+    .item{border:1px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin:12px 0;background:#fff}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    .title{font-weight:900;color:#111}
+    .meta{color:#666;font-size:.95rem}
+    .btn-mini{padding:7px 12px;border-radius:10px;border:1px solid #222;background:#fff;font-weight:800;cursor:pointer}
+    .btn-mini:hover{background:#f3f4f6}
+    ul.chk{margin:10px 0 0;padding-left:20px}
+    ul.chk li{margin:6px 0}
+    .hint{color:#666;font-size:.95rem;margin-top:8px;line-height:1.55}
+    .noteBox{border:1px dashed #d1d5db;border-radius:12px;padding:10px 12px;background:#fafafa;margin-top:10px}
+    textarea{width:100%;min-height:88px}
+  </style>
+</head>
+
+<body>
+<main class="container" style="max-width:880px; margin:0 auto; padding:24px 16px;">
+  <h1>월말·분기말 루틴 체크리스트</h1>
+  <p class="muted">·오늘 날짜 기준으로 “지금 뜰 루틴”만 자동 선별. (로컬 저장 없음 / JSON만 수정)</p>
+
+  <div class="topbar">
+    <a class="btn" href="/">메인</a>
+    <a class="btn" href="/dashboard/">대시보드</a>
+    <a class="btn" href="/calendar/">달력</a>
+  </div>
+
+  <section class="section">
+    <h2 class="local-h2" style="margin:0 0 10px;">필터</h2>
+
+    <div class="toolbar">
+      <div class="field">
+        <label>기준일(선택)</label>
+        <input id="baseDate" type="date" />
+      </div>
+
+      <div class="field">
+        <label>표시 범위</label>
+        <select id="mode">
+          <option value="auto">자동(오늘 기준)</option>
+          <option value="monthly">월말 루틴만</option>
+          <option value="quarterly">분기 루틴만</option>
+          <option value="all">전체 표시</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>검색</label>
+        <input id="q" type="text" placeholder="예: 원천세, 대사, 수납..." />
+      </div>
+
+      <div class="field" style="min-width:auto;">
+        <label>&nbsp;</label>
+        <button class="btn" id="resetBtn" type="button">초기화</button>
+      </div>
+    </div>
+
+    <div class="tagbox" id="tagbox"></div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+      <span class="pill" id="countPill">0건</span>
+      <span class="pill">데이터: <span style="font-weight:900">/data/routines/templates.json</span></span>
+      <span class="pill" id="updatedPill">updated: -</span>
+    </div>
+
+    <div class="hint">
+      ·자동 모드: (월말) templates.monthDays에 걸리는 날짜에 뜸<br/>
+      ·분기 루틴: quarterMonths + monthDays 조건을 동시에 만족하면 뜸
+    </div>
+  </section>
+
+  <div id="list"></div>
+
+  <section class="section">
+    <h2 class="local-h2" style="margin:0 0 10px;">복사용 메모 박스</h2>
+    <p class="muted">·체크리스트를 복사해서 보고/공유할 때 쓰는 용도. (저장은 안 함)</p>
+    <div class="noteBox">
+      <textarea id="memo" placeholder="여기에 자동 생성된 루틴을 복사하거나, 보고 문구를 임시로 작성"></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-mini" type="button" id="copyMemo">메모 복사</button>
+        <button class="btn-mini" type="button" id="clearMemo">비우기</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site-footer" style="text-align:center;">
+    제작·운영: 씩씩하고 귀여운 고주무관 · 개인 전용
+  </footer>
+</main>
+
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const pad = n => (n<10 ? "0"+n : ""+n);
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#39;");
+  }
+  function norm(s){ return String(s||"").trim().toLowerCase(); }
+
+  let RAW = { updated:"-", templates:[] };
+  let ACTIVE_TAG = ""; // roles 태그
+  let TAGS = [];
+
+  function parseBaseDate(){
+    const v = $("baseDate").value;
+    if(!v){
+      const t = new Date();
+      return new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    }
+    const [y,m,d] = v.split("-").map(Number);
+    return new Date(y, m-1, d);
+  }
+
+  function isMonthlyMatch(tpl, d){
+    if(tpl.repeat !== "monthly") return false;
+    const days = Array.isArray(tpl.monthDays) ? tpl.monthDays : [];
+    return days.includes(d.getDate());
+  }
+
+  function isQuarterlyMatch(tpl, d){
+    if(tpl.repeat !== "quarterly") return false;
+    const qm = Array.isArray(tpl.quarterMonths) ? tpl.quarterMonths : [];
+    const md = Array.isArray(tpl.monthDays) ? tpl.monthDays : [];
+    return qm.includes(d.getMonth()+1) && md.includes(d.getDate());
+  }
+
+  function isAutoMatch(tpl, d){
+    if(tpl.repeat === "monthly") return isMonthlyMatch(tpl,d);
+    if(tpl.repeat === "quarterly") return isQuarterlyMatch(tpl,d);
+    // yearly/custom는 자동엔 기본 제외(원하면 규칙 확장)
+    return false;
+  }
+
+  function collectTags(){
+    const set = new Set();
+    for(const tpl of RAW.templates){
+      (Array.isArray(tpl.roles)?tpl.roles:[]).forEach(r=>set.add(String(r)));
+    }
+    TAGS = [...set].sort((a,b)=>a.localeCompare(b,"ko"));
+  }
+
+  function renderTags(){
+    const box = $("tagbox");
+    if(!TAGS.length){
+      box.innerHTML = `<span class="muted">태그 없음</span>`;
+      return;
+    }
+    const btn = (t)=>`
+      <button type="button" class="tagbtn ${ACTIVE_TAG===t?"active":""}" data-tag="${escapeHtml(t)}">
+        #${escapeHtml(t)}
+      </button>
+    `;
+    box.innerHTML =
+      `<button type="button" class="tagbtn ${ACTIVE_TAG===""?"active":""}" data-tag="">전체</button>` +
+      TAGS.map(btn).join("");
+
+    box.querySelectorAll("button[data-tag]").forEach(b=>{
+      b.addEventListener("click",()=>{
+        ACTIVE_TAG = b.getAttribute("data-tag") || "";
+        renderTags();
+        renderList();
+      });
+    });
+  }
+
+  function matchTpl(tpl){
+    const d = parseBaseDate();
+    const mode = $("mode").value;
+    const q = norm($("q").value);
+
+    // mode 필터
+    let ok = true;
+    if(mode === "auto") ok = isAutoMatch(tpl, d);
+    else if(mode === "monthly") ok = (tpl.repeat === "monthly");
+    else if(mode === "quarterly") ok = (tpl.repeat === "quarterly");
+    else ok = true;
+
+    if(!ok) return false;
+
+    // roles 태그 필터
+    if(ACTIVE_TAG){
+      const roles = Array.isArray(tpl.roles) ? tpl.roles : [];
+      if(!roles.includes(ACTIVE_TAG)) return false;
+    }
+
+    // 검색
+    if(!q) return true;
+    const hay = [
+      tpl.title, tpl.repeat,
+      ...(Array.isArray(tpl.roles)?tpl.roles:[]),
+      ...(Array.isArray(tpl.items)?tpl.items:[])
+    ].map(norm).join(" ");
+    return hay.includes(q);
+  }
+
+  function buildCopyText(tpl, d){
+    const head = `- ${tpl.title} (${ymd(d)})`;
+    const items = (Array.isArray(tpl.items)?tpl.items:[]).map(x=>`  · ${x}`).join("\n");
+    return `${head}\n${items}`;
+  }
+
+  function renderList(){
+    const d = parseBaseDate();
+    const list = $("list");
+    const filtered = RAW.templates.filter(matchTpl);
+
+    $("countPill").innerHTML = `<b>${filtered.length}</b>건`;
+
+    if(!filtered.length){
+      list.innerHTML = `<div class="card"><p class="muted">조건에 해당하는 루틴이 없습니다. (날짜/모드/태그 확인)</p></div>`;
+      return;
+    }
+
+    list.innerHTML = filtered.map(tpl=>{
+      const roles = Array.isArray(tpl.roles) ? tpl.roles : [];
+      const roleChips = roles.map(r=>`<span class="chip">#${escapeHtml(r)}</span>`).join("");
+      const repeatChip = `<span class="chip">repeat:${escapeHtml(tpl.repeat||"-")}</span>`;
+
+      const items = (Array.isArray(tpl.items)?tpl.items:[]).map(x=>`<li>${escapeHtml(x)}</li>`).join("");
+      const copyText = buildCopyText(tpl, d);
+
+      return `
+        <div class="item">
+          <div class="row">
+            <div>
+              <div class="title">${escapeHtml(tpl.title||"(제목없음)")}</div>
+              <div class="meta">${escapeHtml(tpl.id||"")}</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn-mini" type="button" data-copy="${escapeHtml(copyText)}">루틴 복사</button>
+              <button class="btn-mini" type="button" data-append="${escapeHtml(copyText)}">메모에 추가</button>
+            </div>
+          </div>
+          <div class="chips">${repeatChip}${roleChips}</div>
+          <ul class="chk">${items}</ul>
+        </div>
+      `;
+    }).join("");
+
+    list.querySelectorAll("button[data-copy]").forEach(b=>{
+      b.addEventListener("click", async ()=>{
+        const txt = b.getAttribute("data-copy") || "";
+        try{
+          await navigator.clipboard.writeText(txt);
+          b.textContent = "복사됨";
+          setTimeout(()=>b.textContent="루틴 복사", 900);
+        }catch(e){
+          alert("클립보드 복사 실패: 브라우저 권한을 확인하세요.");
+        }
+      });
+    });
+
+    list.querySelectorAll("button[data-append]").forEach(b=>{
+      b.addEventListener("click", ()=>{
+        const txt = b.getAttribute("data-append") || "";
+        const memo = $("memo");
+        memo.value = (memo.value ? memo.value + "\n\n" : "") + txt;
+        memo.focus();
+      });
+    });
+  }
+
+  async function init(){
+    // 기준일 기본: 오늘
+    $("baseDate").value = ymd(new Date());
+
+    try{
+      const r = await fetch("/data/routines/templates.json");
+      if(r.ok) RAW = await r.json();
+    }catch(e){}
+
+    RAW.templates = Array.isArray(RAW.templates) ? RAW.templates : [];
+    $("updatedPill").textContent = `updated: ${RAW.updated || "-"}`;
+
+    collectTags();
+    renderTags();
+    renderList();
+  }
+
+  $("baseDate").addEventListener("change", renderList);
+  $("mode").addEventListener("change", renderList);
+  $("q").addEventListener("input", renderList);
+
+  $("resetBtn").addEventListener("click", ()=>{
+    $("baseDate").value = ymd(new Date());
+    $("mode").value = "auto";
+    $("q").value = "";
+    ACTIVE_TAG = "";
+    renderTags();
+    renderList();
+  });
+
+  $("copyMemo").addEventListener("click", async ()=>{
+    try{
+      await navigator.clipboard.writeText($("memo").value || "");
+      $("copyMemo").textContent = "복사됨";
+      setTimeout(()=>$("copyMemo").textContent="메모 복사", 900);
+    }catch(e){
+      alert("클립보드 복사 실패: 브라우저 권한을 확인하세요.");
+    }
+  });
+  $("clearMemo").addEventListener("click", ()=>{$("memo").value="";});
+
+  init();
+})();
+</script>
+
+<script src="/static/disable-copy.js"></script>
+<script src="/static/global-loader.js?v=1"></script>
+</body>
+</html>

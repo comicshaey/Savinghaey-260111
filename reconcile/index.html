@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>세입·세출 대사(수기 입력 MVP)</title>
+  <link rel="icon" href="/static/favicon.ico" />
+  <link rel="stylesheet" href="/static/style.css" />
+
+  <style>
+    .topbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 14px}
+    .section{border:1px solid #e5e5e5;border-radius:12px;padding:16px 18px;margin:18px 0;background:#fff}
+    .muted{color:#555;font-size:0.95rem;line-height:1.6}
+    .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+    textarea{width:100%;min-height:220px;resize:vertical}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:220px}
+    .field label{font-size:.95rem;color:#444}
+    .btn{display:inline-block;padding:10px 16px;border-radius:12px;border:1px solid #222;text-decoration:none;color:#111;font-weight:600;background:#fff;cursor:pointer}
+    .btn:hover{background:#f3f4f6}
+    .btn-mini{padding:7px 12px;border-radius:10px;border:1px solid #222;background:#fff;font-weight:800;cursor:pointer}
+    .btn-mini:hover{background:#f3f4f6}
+    .pill{display:inline-block;padding:6px 10px;border:1px solid #d1d5db;border-radius:999px;background:#f9fafb;font-size:.95rem;color:#111;white-space:nowrap}
+    .card{border:1px solid #e5e5e5;border-radius:12px;padding:12px 14px;margin:12px 0;background:#fff}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;vertical-align:top;font-size:.95rem}
+    th{font-weight:900}
+    .ok{font-weight:900}
+    .warn{font-weight:900}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+    details{border:1px solid #e5e5e5;border-radius:12px;background:#fff;margin:12px 0;overflow:hidden}
+    summary{padding:12px 14px;cursor:pointer;font-weight:900}
+    .hint{color:#666;font-size:.92rem}
+  </style>
+</head>
+
+<body>
+<main class="container" style="max-width:980px; margin:0 auto; padding:24px 16px;">
+  <h1>세입·세출 대사(수기 입력 MVP)</h1>
+  <p class="muted">
+    ·서버/로컬저장 없음. 입력한 순간만 비교해서 <b>미매칭/중복/금액불일치 후보</b>를 뽑습니다.<br/>
+    ·정교한 “완전 자동 대사”는 업로드/DB가 필요하니, 지금은 <b>누락 후보를 빨리 잡는 방식</b>으로 갑니다.
+  </p>
+
+  <div class="topbar">
+    <a class="btn" href="/">메인</a>
+    <a class="btn" href="/routines/">루틴</a>
+    <a class="btn" href="/flows/">업무흐름</a>
+  </div>
+
+  <section class="section">
+    <h2 style="font-size:1.2rem; margin:0 0 12px">입력 포맷</h2>
+    <p class="muted">
+      아래처럼 <b>한 줄 = 한 건</b>으로 붙여넣기 하면 됩니다. (복붙 전용)<br/>
+      <span class="mono">YYYY-MM-DD | 금액 | 내용</span> 형식 권장. 날짜/내용은 생략 가능하지만 정확도가 떨어집니다.
+    </p>
+    <div class="card">
+      <div class="hint">
+        예시(거래내역): <span class="mono">2026-01-10 | -120,000 | 원천세 납부</span><br/>
+        예시(장부내역): <span class="mono">2026-01-10 | -120000 | (지출결의) 원천세</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 style="font-size:1.2rem; margin:0 0 12px">데이터 입력</h2>
+
+    <div class="row">
+      <div class="field">
+        <label>매칭 기준(날짜 허용 오차)</label>
+        <select id="dateTol">
+          <option value="0">0일(같은 날짜만)</option>
+          <option value="1" selected>±1일</option>
+          <option value="2">±2일</option>
+          <option value="3">±3일</option>
+          <option value="7">±7일</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>금액 허용 오차</label>
+        <select id="amtTol">
+          <option value="0" selected>0원(완전일치)</option>
+          <option value="10">±10원</option>
+          <option value="100">±100원</option>
+          <option value="1000">±1,000원</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>내용 키워드 가중치</label>
+        <select id="textWeight">
+          <option value="0">사용 안 함</option>
+          <option value="1" selected>약하게</option>
+          <option value="2">강하게</option>
+        </select>
+      </div>
+
+      <div class="field" style="min-width:auto">
+        <label>&nbsp;</label>
+        <button class="btn" type="button" id="runBtn">비교 실행</button>
+      </div>
+
+      <div class="field" style="min-width:auto">
+        <label>&nbsp;</label>
+        <button class="btn" type="button" id="clearBtn">입력 비우기</button>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:12px">
+      <div>
+        <h3 style="margin:0 0 8px">① 계좌/카드 거래내역(원장)</h3>
+        <textarea id="bank" placeholder="예) 2026-01-10 | -120,000 | 원천세 납부&#10;예) 2026-01-10 | +300,000 | 수익자부담금 수납"></textarea>
+      </div>
+      <div>
+        <h3 style="margin:0 0 8px">② 장부/전표/결의 내역(에듀파인 등)</h3>
+        <textarea id="ledger" placeholder="예) 2026-01-10 | -120000 | (지출결의) 원천세&#10;예) 2026-01-10 | +300000 | (징수결의) 수익자부담금"></textarea>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;">
+      <span class="pill">룰: <b>/data/reconcile/rules.json</b></span>
+      <span class="pill" id="rulesUpdated">updated: -</span>
+      <span class="pill" id="statPill">대기</span>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 style="font-size:1.2rem; margin:0 0 12px">결과</h2>
+    <div id="result"></div>
+
+    <details>
+      <summary>결과 텍스트(복사용)</summary>
+      <div style="padding:12px 14px">
+        <textarea id="outText" style="min-height:160px" placeholder="비교 실행 후 자동 생성"></textarea>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-mini" type="button" id="copyOut">복사</button>
+          <button class="btn-mini" type="button" id="clearOut">비우기</button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <footer class="site-footer" style="text-align:center;">
+    제작·운영: 씩씩하고 귀여운 고주무관 · 개인 전용
+  </footer>
+</main>
+
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const norm = (s)=>String(s||"").trim().toLowerCase();
+
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#39;");
+  }
+
+  function parseMoney(s){
+    // +, -, 콤마, 공백, 원 처리
+    const t = String(s||"").replaceAll(",","").replaceAll("원","").replaceAll(" ","").trim();
+    if(!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function parseDate(s){
+    const t = String(s||"").trim();
+    const m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(!m) return null;
+    const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    const dt = new Date(y, mo-1, d);
+    if(dt.getFullYear()!==y || (dt.getMonth()+1)!==mo || dt.getDate()!==d) return null;
+    return dt;
+  }
+
+  function daysBetween(a,b){
+    const A = new Date(a.getFullYear(),a.getMonth(),a.getDate()).getTime();
+    const B = new Date(b.getFullYear(),b.getMonth(),b.getDate()).getTime();
+    return Math.round((A-B)/(24*3600*1000));
+  }
+
+  function parseLines(raw){
+    const lines = String(raw||"")
+      .split(/\r?\n/)
+      .map(x=>x.trim())
+      .filter(x=>x && !x.startsWith("#"));
+
+    const items = [];
+    for(const line of lines){
+      // 기본: date | amount | memo
+      const parts = line.split("|").map(x=>x.trim());
+      let date = null, amt = null, memo = "";
+
+      if(parts.length >= 2){
+        date = parseDate(parts[0]) || null;
+        amt = parseMoney(parts[1]);
+        memo = parts.slice(2).join(" | ").trim();
+      }else{
+        // 유연모드: "2026-01-10 -120000 원천세" 같은 것
+        const m = line.match(/(\d{4}-\d{2}-\d{2})/);
+        if(m) date = parseDate(m[1]);
+        const m2 = line.match(/([+-]?\s*[\d,]+)\s*원?/);
+        if(m2) amt = parseMoney(m2[1]);
+        memo = line;
+      }
+
+      if(amt===null){
+        items.push({ raw: line, ok:false, reason:"금액 파싱 실패" });
+        continue;
+      }
+      items.push({ raw: line, ok:true, date, amt, memo });
+    }
+    return items;
+  }
+
+  // 룰 기반 힌트(키워드 포함시)
+  let RULES = { updated:"-", keywordRules:[] };
+
+  function hintFor(memo){
+    const t = norm(memo);
+    const hits = [];
+    for(const r of (Array.isArray(RULES.keywordRules)?RULES.keywordRules:[])){
+      const k = norm(r.keyword);
+      if(k && t.includes(k)){
+        hits.push(`${r.hint || r.keyword}${r.direction ? `(${r.direction})` : ""}`);
+      }
+    }
+    return hits.slice(0,3); // 과다 출력 방지
+  }
+
+  function scorePair(a, b, dateTol, amtTol, textWeight){
+    // 낮을수록 좋다(거리)
+    let score = 0;
+
+    // 금액 우선
+    const da = Math.abs(a.amt - b.amt);
+    if(da > amtTol) return null;
+    score += da * 1.0;
+
+    // 날짜
+    if(a.date && b.date){
+      const dd = Math.abs(daysBetween(a.date, b.date));
+      if(dd > dateTol) return null;
+      score += dd * 50; // 날짜 1일차이를 꽤 크게 봄(실무 감각)
+    }else{
+      // 날짜 없는 경우는 약한 패널티
+      score += 80;
+    }
+
+    // 텍스트(키워드 가중치)
+    if(textWeight > 0){
+      const ta = norm(a.memo);
+      const tb = norm(b.memo);
+
+      let common = 0;
+      // 아주 단순한 공통 토큰(공백 기준)
+      const A = new Set(ta.split(/\s+/).filter(x=>x.length>=2));
+      const B = new Set(tb.split(/\s+/).filter(x=>x.length>=2));
+      for(const w of A){ if(B.has(w)) common++; }
+
+      // 룰 키워드 힌트도 공통으로 있으면 보너스
+      const ha = hintFor(a.memo).join(" ");
+      const hb = hintFor(b.memo).join(" ");
+      let hintBonus = 0;
+      if(ha && hb){
+        const HA = new Set(norm(ha).split(/\s+/));
+        const HB = new Set(norm(hb).split(/\s+/));
+        for(const w of HA){ if(HB.has(w)) hintBonus++; }
+      }
+
+      // common 많을수록 score 감소
+      score -= (common * 30 * textWeight);
+      score -= (hintBonus * 40);
+    }
+
+    return score;
+  }
+
+  function greedyMatch(bank, ledger, dateTol, amtTol, textWeight){
+    const matches = [];
+    const usedLedger = new Set();
+
+    // 각 bank 항목에 대해 최적 ledger를 하나만 붙이기(탐욕)
+    for(let i=0;i<bank.length;i++){
+      const a = bank[i];
+      if(!a.ok) continue;
+
+      let best = null;
+      for(let j=0;j<ledger.length;j++){
+        if(usedLedger.has(j)) continue;
+        const b = ledger[j];
+        if(!b.ok) continue;
+
+        const sc = scorePair(a,b,dateTol,amtTol,textWeight);
+        if(sc===null) continue;
+        if(best===null || sc < best.sc){
+          best = { i, j, sc };
+        }
+      }
+
+      if(best){
+        usedLedger.add(best.j);
+        matches.push(best);
+      }
+    }
+
+    return { matches, usedLedger };
+  }
+
+  function renderTable(title, arr){
+    if(!arr.length){
+      return `<div class="card"><div class="ok">${escapeHtml(title)}</div><div class="muted">·해당 없음</div></div>`;
+    }
+    const rows = arr.map(x=>`
+      <tr>
+        <td class="mono">${escapeHtml(x.side||"")}</td>
+        <td class="mono">${escapeHtml(x.date||"-")}</td>
+        <td class="mono">${escapeHtml(String(x.amt))}</td>
+        <td>${escapeHtml(x.memo||x.raw||"")}</td>
+        <td>${escapeHtml(x.note||"")}</td>
+      </tr>
+    `).join("");
+    return `
+      <div class="card">
+        <div class="warn">${escapeHtml(title)} (${arr.length}건)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>구분</th><th>날짜</th><th>금액</th><th>내용</th><th>비고</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function ymd(d){
+    if(!d) return "-";
+    const yy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${yy}-${mm}-${dd}`;
+  }
+
+  function buildOutText(summary){
+    const lines = [];
+    lines.push(`[대사 결과 요약]`);
+    lines.push(`- 원장 입력: ${summary.bankOk}/${summary.bankTotal} (정상/전체)`);
+    lines.push(`- 장부 입력: ${summary.ledgerOk}/${summary.ledgerTotal} (정상/전체)`);
+    lines.push(`- 매칭: ${summary.matchCount}건`);
+    lines.push(`- 미매칭(원장): ${summary.unmatchedBank.length}건`);
+    lines.push(`- 미매칭(장부): ${summary.unmatchedLedger.length}건`);
+    lines.push(`- 의심(중복금액): ${summary.dupes.length}건`);
+    lines.push(``);
+
+    if(summary.unmatchedBank.length){
+      lines.push(`[미매칭(원장)]`);
+      for(const x of summary.unmatchedBank){
+        lines.push(`- ${x.date} | ${x.amt} | ${x.memo}`);
+      }
+      lines.push(``);
+    }
+    if(summary.unmatchedLedger.length){
+      lines.push(`[미매칭(장부)]`);
+      for(const x of summary.unmatchedLedger){
+        lines.push(`- ${x.date} | ${x.amt} | ${x.memo}`);
+      }
+      lines.push(``);
+    }
+    if(summary.dupes.length){
+      lines.push(`[중복금액 의심]`);
+      for(const x of summary.dupes){
+        lines.push(`- ${x.side} | ${x.amt} | ${x.count}건`);
+      }
+      lines.push(``);
+    }
+    return lines.join("\n");
+  }
+
+  function findDupes(okItems, side){
+    const map = new Map();
+    for(const it of okItems){
+      const key = String(it.amt);
+      map.set(key, (map.get(key)||0)+1);
+    }
+    const out = [];
+    for(const [amt,count] of map.entries()){
+      if(count >= 2){
+        out.push({ side, amt, count });
+      }
+    }
+    return out.sort((a,b)=>b.count-a.count);
+  }
+
+  async function loadRules(){
+    try{
+      const r = await fetch("/data/reconcile/rules.json");
+      if(r.ok) RULES = await r.json();
+    }catch(e){}
+    $("rulesUpdated").textContent = `updated: ${RULES.updated || "-"}`;
+  }
+
+  function run(){
+    const bank = parseLines($("bank").value);
+    const ledger = parseLines($("ledger").value);
+
+    const bankOk = bank.filter(x=>x.ok);
+    const ledgerOk = ledger.filter(x=>x.ok);
+
+    const dateTol = Number($("dateTol").value);
+    const amtTol = Number($("amtTol").value);
+    const textWeight = Number($("textWeight").value);
+
+    const { matches, usedLedger } = greedyMatch(bankOk, ledgerOk, dateTol, amtTol, textWeight);
+
+    // 매칭된 것 표시용
+    const matchedBankIdx = new Set(matches.map(x=>x.i));
+    const matchedLedgerIdx = new Set(matches.map(x=>x.j));
+
+    const unmatchedBank = [];
+    for(let i=0;i<bankOk.length;i++){
+      if(!matchedBankIdx.has(i)){
+        const it = bankOk[i];
+        unmatchedBank.push({
+          side:"원장",
+          date: ymd(it.date),
+          amt: it.amt,
+          memo: it.memo || it.raw,
+          note: (hintFor(it.memo).join(", ") || "")
+        });
+      }
+    }
+
+    const unmatchedLedger = [];
+    for(let j=0;j<ledgerOk.length;j++){
+      if(!matchedLedgerIdx.has(j)){
+        const it = ledgerOk[j];
+        unmatchedLedger.push({
+          side:"장부",
+          date: ymd(it.date),
+          amt: it.amt,
+          memo: it.memo || it.raw,
+          note: (hintFor(it.memo).join(", ") || "")
+        });
+      }
+    }
+
+    // 파싱 실패 라인
+    const bad = [];
+    for(const x of bank){ if(!x.ok) bad.push({side:"원장", raw:x.raw, date:"-", amt:"-", memo:x.raw, note:x.reason}); }
+    for(const x of ledger){ if(!x.ok) bad.push({side:"장부", raw:x.raw, date:"-", amt:"-", memo:x.raw, note:x.reason}); }
+
+    // 중복 금액 의심
+    const dupes = [
+      ...findDupes(bankOk, "원장"),
+      ...findDupes(ledgerOk, "장부")
+    ];
+
+    const summary = {
+      bankTotal: bank.length, bankOk: bankOk.length,
+      ledgerTotal: ledger.length, ledgerOk: ledgerOk.length,
+      matchCount: matches.length,
+      unmatchedBank, unmatchedLedger, dupes
+    };
+
+    // 렌더링
+    const result = $("result");
+    const stat = `매칭 ${matches.length}건 / 미매칭(원장) ${unmatchedBank.length}건 / 미매칭(장부) ${unmatchedLedger.length}건`;
+    $("statPill").innerHTML = `<b>${escapeHtml(stat)}</b>`;
+
+    let html = "";
+    if(bad.length){
+      html += `<div class="card"><div class="warn">입력 오류 라인 (${bad.length}건)</div><div class="muted">·금액 파싱 실패가 대부분입니다. 형식을 맞춰 다시 붙여넣기하세요.</div></div>`;
+      html += renderTable("입력 오류 라인", bad.map(x=>({
+        side:x.side, date:"-", amt:"-", memo:x.memo, note:x.note
+      })));
+    }
+
+    html += renderTable("미매칭(원장→장부 연결 안 됨)", unmatchedBank);
+    html += renderTable("미매칭(장부→원장 연결 안 됨)", unmatchedLedger);
+
+    if(dupes.length){
+      const dupRows = dupes.map(x=>({ side:x.side, date:"-", amt:x.amt, memo:`동일 금액 ${x.count}건`, note:"중복 가능성(분할/반복납부/환불 포함)" }));
+      html += renderTable("중복금액 의심(검토 필요)", dupRows);
+    }else{
+      html += `<div class="card"><div class="ok">중복금액 의심</div><div class="muted">·2건 이상 동일 금액 없음(단순 기준)</div></div>`;
+    }
+
+    result.innerHTML = html;
+
+    // 복사용 텍스트
+    $("outText").value = buildOutText(summary);
+  }
+
+  // 이벤트
+  $("runBtn").addEventListener("click", run);
+  $("clearBtn").addEventListener("click", ()=>{
+    $("bank").value = "";
+    $("ledger").value = "";
+    $("result").innerHTML = "";
+    $("outText").value = "";
+    $("statPill").textContent = "대기";
+  });
+
+  $("copyOut").addEventListener("click", async ()=>{
+    try{
+      await navigator.clipboard.writeText($("outText").value || "");
+      $("copyOut").textContent = "복사됨";
+      setTimeout(()=>$("copyOut").textContent="복사", 900);
+    }catch(e){
+      alert("클립보드 복사 실패: 브라우저 권한을 확인하세요.");
+    }
+  });
+  $("clearOut").addEventListener("click", ()=>{$("outText").value="";});
+
+  loadRules();
+})();
+</script>
+
+<script src="/static/disable-copy.js"></script>
+<script src="/static/global-loader.js?v=1"></script>
+</body>
+</html>

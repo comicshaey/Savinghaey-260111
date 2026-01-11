@@ -1,0 +1,15 @@
+{
+  "updated": "2026-01-11",
+  "keywordRules": [
+    { "keyword": "원천세", "hint": "세무/원천세", "direction": "지출" },
+    { "keyword": "지방소득세", "hint": "세무/지방소득세", "direction": "지출" },
+    { "keyword": "국민연금", "hint": "사회보험/국민연금", "direction": "지출" },
+    { "keyword": "건강보험", "hint": "사회보험/건강보험", "direction": "지출" },
+    { "keyword": "고용보험", "hint": "사회보험/고용보험", "direction": "지출" },
+    { "keyword": "산재", "hint": "사회보험/산재", "direction": "지출" },
+
+    { "keyword": "수익자", "hint": "수익자부담금", "direction": "세입" },
+    { "keyword": "수납", "hint": "세입/수납", "direction": "세입" },
+    { "keyword": "환불", "hint": "세입/환불", "direction": "지출" }
+  ]
+}
