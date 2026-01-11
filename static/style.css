@@ -398,3 +398,8 @@ body h2 + hr {
   width: 100%;
   box-sizing: border-box;
 }
+
+
+.task-memo {
+  white-space: pre-wrap;
+}
