@@ -1,0 +1,33 @@
+{
+  "updated": "2026-01-11",
+  "items": [
+    {
+      "title": "K-에듀파인",
+      "url": "https://www.eduinfo.go.kr/",
+      "tags": ["회계", "지출", "세입"],
+      "memo": "지출결의/지급명령/징수결의",
+      "group": "시스템"
+    },
+    {
+      "title": "나이스",
+      "url": "https://www.neis.go.kr/",
+      "tags": ["복무", "인사", "증빙"],
+      "memo": "복무/인사/교육통계",
+      "group": "시스템"
+    },
+    {
+      "title": "홈택스",
+      "url": "https://www.hometax.go.kr/",
+      "tags": ["세무", "원천세", "신고"],
+      "memo": "원천세/지방소득세/간이지급명세서",
+      "group": "세무"
+    },
+    {
+      "title": "위택스",
+      "url": "https://www.wetax.go.kr/",
+      "tags": ["세무", "지방세"],
+      "memo": "지방소득세 납부",
+      "group": "세무"
+    }
+  ]
+}

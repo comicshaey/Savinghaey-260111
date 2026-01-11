@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>업무 링크북</title>
+  <link rel="icon" href="/static/favicon.ico" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .topbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 14px}
+    .pill{display:inline-block;padding:6px 10px;border:1px solid #d1d5db;border-radius:999px;background:#f9fafb;font-size:.95rem;color:#111;white-space:nowrap}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:220px}
+    .field label{font-size:.95rem;color:#444}
+    .tagbox{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+    .tagbtn{padding:6px 10px;border-radius:999px;border:1px solid #e5e7eb;background:#fafafa;cursor:pointer;font-size:.92rem}
+    .tagbtn.active{border-color:#111;background:#111;color:#fff}
+    .item{border:1px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin:12px 0;background:#fff}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    .title{font-weight:800;color:#111}
+    .meta{color:#666;font-size:.95rem}
+    .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    .chip{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #e5e7eb;background:#fafafa;font-size:.85rem;color:#333}
+    .btn-mini{padding:7px 12px;border-radius:10px;border:1px solid #222;background:#fff;font-weight:700;cursor:pointer}
+    .btn-mini:hover{background:#f3f4f6}
+    .muted2{color:#666;font-size:.95rem;margin:6px 0 0}
+  </style>
+</head>
+
+<body>
+<main class="container" style="max-width:880px; margin:0 auto; padding:24px 16px;">
+  <h1>업무 링크북</h1>
+  <p class="muted">·자주 쓰는 시스템/사이트/자료 링크를 검색·필터로 빠르게 찾는 페이지 (로컬 저장 0)</p>
+
+  <div class="topbar">
+    <a class="btn" href="/">메인</a>
+    <a class="btn" href="/dashboard/">대시보드</a>
+    <a class="btn" href="/calendar/">달력</a>
+  </div>
+
+  <section class="section">
+    <h2 class="local-h2" style="margin:0 0 10px;">검색/필터</h2>
+
+    <div class="toolbar">
+      <div class="field">
+        <label>검색</label>
+        <input id="q" type="text" placeholder="예: 원천세, 나이스, 지출, 교육청..." />
+      </div>
+
+      <div class="field">
+        <label>그룹</label>
+        <select id="group">
+          <option value="">전체</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>정렬</label>
+        <select id="sort">
+          <option value="title">제목</option>
+          <option value="group">그룹</option>
+          <option value="recent">최근 업데이트(메타)</option>
+        </select>
+      </div>
+
+      <div class="field" style="min-width:auto;">
+        <label>&nbsp;</label>
+        <button class="btn" id="resetBtn" type="button">초기화</button>
+      </div>
+    </div>
+
+    <div class="tagbox" id="tagbox"></div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+      <span class="pill" id="countPill">0건</span>
+      <span class="pill">데이터: <span style="font-weight:800">/data/links/links.json</span></span>
+      <span class="pill" id="updatedPill">updated: -</span>
+    </div>
+  </section>
+
+  <div id="list"></div>
+
+  <footer class="site-footer" style="text-align:center;">
+    제작·운영: 씩씩하고 귀여운 고주무관 · 개인 전용
+  </footer>
+</main>
+
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#39;");
+  }
+
+  let RAW = { updated:"-", items:[] };
+  let ACTIVE_TAG = "";
+  let TAGS = [];
+  let GROUPS = [];
+
+  function norm(s){ return String(s||"").trim().toLowerCase(); }
+
+  function buildOptions(){
+    const sel = $("group");
+    sel.innerHTML = `<option value="">전체</option>` + GROUPS
+      .map(g=>`<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("");
+  }
+
+  function renderTags(){
+    const box = $("tagbox");
+    if(!TAGS.length){
+      box.innerHTML = `<span class="muted">태그 없음</span>`;
+      return;
+    }
+
+    const btn = (t)=>`
+      <button type="button" class="tagbtn ${ACTIVE_TAG===t?"active":""}" data-tag="${escapeHtml(t)}">
+        #${escapeHtml(t)}
+      </button>
+    `;
+
+    box.innerHTML =
+      `<button type="button" class="tagbtn ${ACTIVE_TAG===""?"active":""}" data-tag="">전체</button>` +
+      TAGS.map(btn).join("");
+
+    box.querySelectorAll("button[data-tag]").forEach(b=>{
+      b.addEventListener("click",()=>{
+        ACTIVE_TAG = b.getAttribute("data-tag") || "";
+        renderTags();
+        renderList();
+      });
+    });
+  }
+
+  function sortItems(arr){
+    const mode = $("sort").value;
+    const copy = arr.slice();
+
+    if(mode === "group"){
+      copy.sort((a,b)=> (String(a.group||"") < String(b.group||"") ? -1 : 1));
+      return copy;
+    }
+    if(mode === "recent"){
+      // 최근 업데이트는 JSON에 별도 필드가 없어서, 우선 title 기준으로 둠(자리만 잡음)
+      copy.sort((a,b)=> (String(a.title||"") < String(b.title||"") ? -1 : 1));
+      return copy;
+    }
+    copy.sort((a,b)=> (String(a.title||"") < String(b.title||"") ? -1 : 1));
+    return copy;
+  }
+
+  function matchItem(it){
+    const q = norm($("q").value);
+    const group = $("group").value;
+
+    if(group && String(it.group||"") !== group) return false;
+    if(ACTIVE_TAG){
+      const tags = Array.isArray(it.tags) ? it.tags : [];
+      if(!tags.includes(ACTIVE_TAG)) return false;
+    }
+
+    if(!q) return true;
+
+    const hay = [
+      it.title, it.url, it.memo, it.group,
+      ...(Array.isArray(it.tags)?it.tags:[])
+    ].map(norm).join(" ");
+    return hay.includes(q);
+  }
+
+  function renderList(){
+    const list = $("list");
+    const filtered = RAW.items.filter(matchItem);
+    const sorted = sortItems(filtered);
+
+    $("countPill").innerHTML = `<b>${sorted.length}</b>건`;
+
+    if(!sorted.length){
+      list.innerHTML = `<div class="card"><p class="muted">조건에 해당하는 항목이 없습니다.</p></div>`;
+      return;
+    }
+
+    list.innerHTML = sorted.map(it=>{
+      const tags = Array.isArray(it.tags) ? it.tags : [];
+      const chips = tags.map(t=>`<span class="chip">#${escapeHtml(t)}</span>`).join("");
+      const memo = it.memo ? `<div class="muted2">${escapeHtml(it.memo)}</div>` : "";
+      const group = it.group ? `<span class="chip">그룹:${escapeHtml(it.group)}</span>` : "";
+
+      return `
+        <div class="item">
+          <div class="row">
+            <div>
+              <div class="title">${escapeHtml(it.title || "(제목없음)")}</div>
+              <div class="meta">${escapeHtml(it.url || "")}</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <a class="btn-mini" href="${escapeHtml(it.url||"#")}" target="_blank" rel="noopener">열기</a>
+              <button class="btn-mini" type="button" data-copy="${escapeHtml(it.url||"")}">URL 복사</button>
+            </div>
+          </div>
+
+          ${memo}
+
+          <div class="chips">
+            ${group}
+            ${chips}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    list.querySelectorAll("button[data-copy]").forEach(b=>{
+      b.addEventListener("click", async ()=>{
+        const url = b.getAttribute("data-copy") || "";
+        try{
+          await navigator.clipboard.writeText(url);
+          b.textContent = "복사됨";
+          setTimeout(()=>b.textContent="URL 복사", 900);
+        }catch(e){
+          alert("클립보드 복사 실패: 브라우저 권한을 확인하세요.");
+        }
+      });
+    });
+  }
+
+  function collectMeta(){
+    const tags = new Set();
+    const groups = new Set();
+
+    for(const it of RAW.items){
+      if(it.group) groups.add(String(it.group));
+      const t = Array.isArray(it.tags) ? it.tags : [];
+      t.forEach(x=>tags.add(String(x)));
+    }
+    TAGS = [...tags].sort((a,b)=>a.localeCompare(b,"ko"));
+    GROUPS = [...groups].sort((a,b)=>a.localeCompare(b,"ko"));
+  }
+
+  async function init(){
+    try{
+      const r = await fetch("/data/links/links.json");
+      if(r.ok){
+        RAW = await r.json();
+      }
+    }catch(e){}
+
+    RAW.items = Array.isArray(RAW.items) ? RAW.items : [];
+    $("updatedPill").textContent = `updated: ${RAW.updated || "-"}`;
+
+    collectMeta();
+    buildOptions();
+    renderTags();
+    renderList();
+  }
+
+  $("q").addEventListener("input", ()=>renderList());
+  $("group").addEventListener("change", ()=>renderList());
+  $("sort").addEventListener("change", ()=>renderList());
+  $("resetBtn").addEventListener("click", ()=>{
+    $("q").value = "";
+    $("group").value = "";
+    $("sort").value = "title";
+    ACTIVE_TAG = "";
+    renderTags();
+    renderList();
+  });
+
+  init();
+})();
+</script>
+
+<script src="/static/disable-copy.js"></script>
+<script src="/static/global-loader.js?v=1"></script>
+</body>
+</html>
