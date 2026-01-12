@@ -482,3 +482,18 @@ body.page-deadline .desc.white-pre{
   overflow-wrap:anywhere;
   line-height:1.5;
 }
+
+body.page-deadline .more-row{
+  display:flex;
+  justify-content:center;
+  margin-top:12px;
+}
+body.page-deadline .btn.more{
+  border-color:#d1d5db;
+  background:#f9fafb;
+  font-weight:700;
+}
+body.page-deadline .btn.more:hover{
+  background:#eef2ff;
+}
+
