@@ -19,20 +19,29 @@
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
     .title{font-weight:900;color:#111}
     .meta{color:#666;font-size:.95rem}
-    .btn-mini{padding:7px 12px;border-radius:10px;border:1px solid #222;background:#fff;font-weight:800;cursor:pointer}
-    .btn-mini:hover{background:#f3f4f6}
     ul.chk{margin:10px 0 0;padding-left:20px}
     ul.chk li{margin:6px 0}
     .hint{color:#666;font-size:.95rem;margin-top:8px;line-height:1.55}
-    .noteBox{border:1px dashed #d1d5db;border-radius:12px;padding:10px 12px;background:#fafafa;margin-top:10px}
-    textarea{width:100%;min-height:110px}
+    .sectionTitle{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 0 8px}
+    details.dailyBox{border:1px dashed #d1d5db;border-radius:12px;background:#fafafa;padding:10px 12px;margin-top:16px}
+    details.dailyBox > summary{cursor:pointer;font-weight:900;list-style:none}
+    details.dailyBox > summary::-webkit-details-marker{display:none}
+    .summaryRow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    .summaryLeft{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .kbd{font-size:.85rem;border:1px solid #d1d5db;border-radius:8px;padding:4px 8px;background:#fff;color:#111}
+    .optline{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .optline input[type="checkbox"]{transform:translateY(1px)}
+    .optbox{display:none;min-width:auto}
+    .optbox.show{display:flex}
+    .optlabel{display:flex;gap:8px;align-items:center;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;background:#fff}
+    .optlabel .muted{font-size:.92rem}
   </style>
 </head>
 
 <body>
 <main class="container" style="max-width:880px; margin:0 auto; padding:24px 16px;">
   <h1>반복 업무 알림</h1>
-  <p class="muted">·월별, 분기별 등</p>
+  <p class="muted">·월간/분기/연간 + 일간 반복</p>
 
   <div class="topbar">
     <a class="btn" href="/">메인으로 돌아가기</a>
@@ -52,11 +61,25 @@
       <div class="field">
         <label>조회 범위</label>
         <select id="mode">
-          <option value="auto">당일</option>
-          <option value="monthly">월별 반복 업무</option>
-          <option value="quarterly">분기별 반복 업무</option>
-          <option value="all">전체 업무 목록</option>
+          <option value="auto">당일(자동 매칭)</option>
+          <option value="monthly">월간 반복</option>
+          <option value="quarterly">분기별 반복</option>
+          <option value="yearly">연간 반복</option>
+          <option value="daily">일간 반복</option>
+          <option value="all">전체(필터만)</option>
         </select>
+      </div>
+
+      <!-- ✅ daily 모드 옵션: 일간 전체 보기 -->
+      <div class="field optbox" id="dailyOptBox" aria-hidden="true" style="min-width:auto;">
+        <label>일간 옵션</label>
+        <div class="optlabel">
+          <input id="showAllDaily" type="checkbox" />
+          <div>
+            <div style="font-weight:900;">일간 전체 보여주기</div>
+            <div class="muted">요일/조건 매칭 무시하고 daily 전부 표시</div>
+          </div>
+        </div>
       </div>
 
       <div class="field">
@@ -74,32 +97,34 @@
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
       <span class="pill" id="countPill">0건</span>
+      <span class="pill">상단(월·분기·연간): <b id="countRecurring">0</b>건</span>
+      <span class="pill">하단(일간): <b id="countDaily">0</b>건</span>
       <span class="pill">데이터: <span style="font-weight:900">/data/routines/templates.json</span></span>
       <span class="pill" id="updatedPill">updated: -</span>
     </div>
   </section>
 
-  <div id="list"></div>
+  <!-- ✅ 상단: 월/분기/연간 -->
+  <div class="sectionTitle">
+    <div style="font-weight:900;font-size:1.05rem;">월·분기·연간 반복</div>
+    <span class="muted">· 기준일/모드/태그/검색 조건 반영</span>
+  </div>
+  <div id="listRecurring"></div>
 
-  <!-- ✅ 여기(메모 영역)가 빠지면 append/copyMemo/clearMemo가 터집니다 -->
-  <section class="section" style="margin-top:18px;">
-    <h2 class="local-h2" style="margin:0 0 10px;">메모</h2>
-    <div class="noteBox">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
-        <div class="muted" style="font-size:.95rem;">
-          · “메모에 추가”로 누적 / 필요하면 전체 복사해서 보고·결재문 초안에 붙이기
+  <!-- ✅ 하단: 일간(접기/펼치기) -->
+  <details class="dailyBox" id="dailyDetails" open>
+    <summary>
+      <div class="summaryRow">
+        <div class="summaryLeft">
+          <span style="font-weight:900;">일간 반복 업무</span>
+          <span class="pill"><b id="dailySummaryCount">0</b>건</span>
+          <span class="kbd">접기/펼치기</span>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn-mini" id="copyMemo" type="button">메모 복사</button>
-          <button class="btn-mini" id="clearMemo" type="button">메모 비우기</button>
-        </div>
+        <div class="muted" style="font-weight:400;">· daily 항목만 모아 표시</div>
       </div>
-      <div style="margin-top:10px;">
-        <textarea id="memo" placeholder="여기에 메모가 쌓입니다. (브라우저 로컬에 자동 저장됨)"></textarea>
-        <div class="hint">※ 이 메모는 같은 브라우저/PC에서는 자동 저장됩니다(로컬스토리지).</div>
-      </div>
-    </div>
-  </section>
+    </summary>
+    <div id="listDaily"></div>
+  </details>
 
   <footer class="site-footer" style="text-align:center; margin-top:18px;">
     제작·운영: 씩씩하고 귀여운 고주무관 · 질병코드 G47.4 기면병 및 탈력발작 · 너넨 기면증 없지? 메롱메롱
@@ -126,18 +151,34 @@
   let ACTIVE_TAG = ""; // roles 태그
   let TAGS = [];
 
-  // 메모 로컬 저장 키
-  const MEMO_KEY = "routines_memo_v1";
+  // ✅ 옵션(로컬 저장): 일간 전체 보기
+  const OPT_KEY = "routines_showAllDaily_v1";
 
   function parseBaseDate(){
-    const el = $("baseDate");
-    const v = el ? el.value : "";
+    const v = $("baseDate")?.value;
     if(!v){
       const t = new Date();
       return new Date(t.getFullYear(), t.getMonth(), t.getDate());
     }
     const [y,m,d] = v.split("-").map(Number);
     return new Date(y, m-1, d);
+  }
+
+  // ===== repeat 매칭 =====
+  function isDailyMatch(tpl, d){
+    if(tpl.repeat !== "daily") return false;
+
+    // 옵션: 특정 요일만 (weekdays: [1..7] or [0..6])
+    const w = d.getDay(); // 0..6 (일..토)
+    const weekdays = Array.isArray(tpl.weekdays) ? tpl.weekdays : null;
+    if(!weekdays || !weekdays.length) return true;
+
+    const set = new Set(weekdays.map(Number).filter(x=>Number.isFinite(x)));
+    if(set.has(w)) return true;            // 0..6 방식
+    const monBased = (w===0 ? 7 : w);      // 1..7 방식(월=1..일=7)
+    if(set.has(monBased)) return true;
+
+    return false;
   }
 
   function isMonthlyMatch(tpl, d){
@@ -153,13 +194,23 @@
     return qm.includes(d.getMonth()+1) && md.includes(d.getDate());
   }
 
-  function isAutoMatch(tpl, d){
-    if(tpl.repeat === "monthly") return isMonthlyMatch(tpl,d);
-    if(tpl.repeat === "quarterly") return isQuarterlyMatch(tpl,d);
-    // yearly/custom는 자동엔 기본 제외
+  function isYearlyMatch(tpl, d){
+    if(tpl.repeat !== "yearly") return false;
+    const months = Array.isArray(tpl.yearMonths) ? tpl.yearMonths
+                  : (Array.isArray(tpl.months) ? tpl.months : []);
+    const md = Array.isArray(tpl.monthDays) ? tpl.monthDays : [];
+    return months.includes(d.getMonth()+1) && md.includes(d.getDate());
+  }
+
+  function matchesDate(tpl, d){
+    if(tpl.repeat === "daily") return isDailyMatch(tpl, d);
+    if(tpl.repeat === "monthly") return isMonthlyMatch(tpl, d);
+    if(tpl.repeat === "quarterly") return isQuarterlyMatch(tpl, d);
+    if(tpl.repeat === "yearly") return isYearlyMatch(tpl, d);
     return false;
   }
 
+  // ===== 태그 수집/렌더 =====
   function collectTags(){
     const set = new Set();
     for(const tpl of RAW.templates){
@@ -176,11 +227,13 @@
       box.innerHTML = `<span class="muted">태그 없음</span>`;
       return;
     }
+
     const btn = (t)=>`
       <button type="button" class="tagbtn ${ACTIVE_TAG===t?"active":""}" data-tag="${escapeHtml(t)}">
         #${escapeHtml(t)}
       </button>
     `;
+
     box.innerHTML =
       `<button type="button" class="tagbtn ${ACTIVE_TAG===""?"active":""}" data-tag="">전체</button>` +
       TAGS.map(btn).join("");
@@ -189,35 +242,21 @@
       b.addEventListener("click",()=>{
         ACTIVE_TAG = b.getAttribute("data-tag") || "";
         renderTags();
-        renderList();
+        renderAll();
       });
     });
   }
 
-  function matchTpl(tpl){
-    const d = parseBaseDate();
-    const modeEl = $("mode");
-    const qEl = $("q");
-    const mode = modeEl ? modeEl.value : "auto";
-    const q = norm(qEl ? qEl.value : "");
-
-    // mode 필터
-    let ok = true;
-    if(mode === "auto") ok = isAutoMatch(tpl, d);
-    else if(mode === "monthly") ok = (tpl.repeat === "monthly");
-    else if(mode === "quarterly") ok = (tpl.repeat === "quarterly");
-    else ok = true;
-
-    if(!ok) return false;
-
-    // roles 태그 필터
+  // ===== 공통 필터(태그/검색) =====
+  function passCommonFilters(tpl){
     if(ACTIVE_TAG){
       const roles = Array.isArray(tpl.roles) ? tpl.roles : [];
       if(!roles.includes(ACTIVE_TAG)) return false;
     }
 
-    // 검색
+    const q = norm($("q")?.value || "");
     if(!q) return true;
+
     const hay = [
       tpl.title, tpl.repeat,
       ...(Array.isArray(tpl.roles)?tpl.roles:[]),
@@ -226,50 +265,21 @@
     return hay.includes(q);
   }
 
-  function buildCopyText(tpl, d){
-    const head = `- ${tpl.title} (${ymd(d)})`;
-    const items = (Array.isArray(tpl.items)?tpl.items:[]).map(x=>`  · ${x}`).join("\n");
-    return `${head}\n${items}`;
-  }
+  // ===== 카드 렌더 =====
+  function renderCards(targetEl, arr){
+    if(!targetEl) return;
 
-  function saveMemo(){
-    const memo = $("memo");
-    if(!memo) return;
-    try{
-      localStorage.setItem(MEMO_KEY, memo.value || "");
-    }catch(e){}
-  }
-
-  function loadMemo(){
-    const memo = $("memo");
-    if(!memo) return;
-    try{
-      memo.value = localStorage.getItem(MEMO_KEY) || "";
-    }catch(e){}
-  }
-
-  function renderList(){
-    const d = parseBaseDate();
-    const list = $("list");
-    if(!list) return;
-
-    const filtered = RAW.templates.filter(matchTpl);
-
-    const countPill = $("countPill");
-    if(countPill) countPill.innerHTML = `<b>${filtered.length}</b>건`;
-
-    if(!filtered.length){
-      list.innerHTML = `<div class="card"><p class="muted">조건에 해당하는 루틴이 없습니다. (날짜/모드/태그 확인)</p></div>`;
+    if(!arr.length){
+      targetEl.innerHTML = `<div class="card"><p class="muted">조건에 해당하는 항목이 없습니다.</p></div>`;
       return;
     }
 
-    list.innerHTML = filtered.map(tpl=>{
+    targetEl.innerHTML = arr.map(tpl=>{
       const roles = Array.isArray(tpl.roles) ? tpl.roles : [];
       const roleChips = roles.map(r=>`<span class="chip">#${escapeHtml(r)}</span>`).join("");
       const repeatChip = `<span class="chip">repeat:${escapeHtml(tpl.repeat||"-")}</span>`;
 
       const items = (Array.isArray(tpl.items)?tpl.items:[]).map(x=>`<li>${escapeHtml(x)}</li>`).join("");
-      const copyText = buildCopyText(tpl, d);
 
       return `
         <div class="item">
@@ -278,54 +288,112 @@
               <div class="title">${escapeHtml(tpl.title||"(제목없음)")}</div>
               <div class="meta">${escapeHtml(tpl.id||"")}</div>
             </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn-mini" type="button" data-copy="${escapeHtml(copyText)}">루틴 복사</button>
-              <button class="btn-mini" type="button" data-append="${escapeHtml(copyText)}">메모에 추가</button>
-            </div>
           </div>
           <div class="chips">${repeatChip}${roleChips}</div>
           <ul class="chk">${items}</ul>
         </div>
       `;
     }).join("");
+  }
 
-    list.querySelectorAll("button[data-copy]").forEach(b=>{
-      b.addEventListener("click", async ()=>{
-        const txt = b.getAttribute("data-copy") || "";
-        try{
-          await navigator.clipboard.writeText(txt);
-          b.textContent = "복사됨";
-          setTimeout(()=>b.textContent="루틴 복사", 900);
-        }catch(e){
-          alert("클립보드 복사 실패: 브라우저 권한을 확인하세요.");
-        }
-      });
-    });
+  // ===== daily 옵션 표시/저장 =====
+  function getShowAllDaily(){
+    try{
+      const v = localStorage.getItem(OPT_KEY);
+      return v === "1";
+    }catch(e){
+      return false;
+    }
+  }
 
-    list.querySelectorAll("button[data-append]").forEach(b=>{
-      b.addEventListener("click", ()=>{
-        const txt = b.getAttribute("data-append") || "";
-        const memo = $("memo");
-        if(!memo){
-          alert("메모 영역(#memo)이 없습니다. 메모 섹션이 삭제됐는지 확인하세요.");
-          return;
-        }
-        memo.value = (memo.value ? memo.value + "\n\n" : "") + txt;
-        memo.focus();
-        saveMemo();
-      });
-    });
+  function setShowAllDaily(v){
+    try{
+      localStorage.setItem(OPT_KEY, v ? "1" : "0");
+    }catch(e){}
+  }
+
+  function syncDailyOptUI(){
+    const mode = $("mode")?.value || "auto";
+    const optBox = $("dailyOptBox");
+    const chk = $("showAllDaily");
+
+    if(!optBox || !chk) return;
+
+    const show = (mode === "daily");
+    optBox.classList.toggle("show", show);
+    optBox.setAttribute("aria-hidden", show ? "false" : "true");
+
+    chk.disabled = !show;
+  }
+
+  // ===== 최종 출력(상단/하단 분리) =====
+  function renderAll(){
+    const d = parseBaseDate();
+    const mode = $("mode")?.value || "auto";
+    const showAllDaily = getShowAllDaily();
+
+    const all = RAW.templates.filter(passCommonFilters);
+
+    let recurring = [];
+    let daily = [];
+
+    if(mode === "all"){
+      recurring = all.filter(tpl => tpl.repeat !== "daily");
+      daily = all.filter(tpl => tpl.repeat === "daily");
+    }
+    else if(mode === "auto"){
+      recurring = all.filter(tpl => tpl.repeat !== "daily" && matchesDate(tpl, d));
+      daily = all.filter(tpl => tpl.repeat === "daily" && matchesDate(tpl, d));
+    }
+    else if(mode === "daily"){
+      recurring = [];
+      daily = showAllDaily
+        ? all.filter(tpl => tpl.repeat === "daily")                 // ✅ 날짜/요일 무시 전체
+        : all.filter(tpl => tpl.repeat === "daily" && matchesDate(tpl, d)); // ✅ 기준일 매칭만
+    }
+    else if(mode === "monthly"){
+      recurring = all.filter(tpl => tpl.repeat === "monthly" && matchesDate(tpl, d));
+      daily = [];
+    }
+    else if(mode === "quarterly"){
+      recurring = all.filter(tpl => tpl.repeat === "quarterly" && matchesDate(tpl, d));
+      daily = [];
+    }
+    else if(mode === "yearly"){
+      recurring = all.filter(tpl => tpl.repeat === "yearly" && matchesDate(tpl, d));
+      daily = [];
+    }
+
+    renderCards($("listRecurring"), recurring);
+    renderCards($("listDaily"), daily);
+
+    const total = recurring.length + daily.length;
+    $("countPill").innerHTML = `<b>${total}</b>건`;
+    $("countRecurring").textContent = String(recurring.length);
+    $("countDaily").textContent = String(daily.length);
+    $("dailySummaryCount").textContent = String(daily.length);
+
+    // daily 모드면 하단 자동 펼침
+    const dailyDetails = $("dailyDetails");
+    if(dailyDetails && mode === "daily") dailyDetails.open = true;
+
+    // 옵션 UI 동기화
+    syncDailyOptUI();
   }
 
   async function init(){
-    // 기준일 기본: 오늘
     const baseDate = $("baseDate");
     if(baseDate) baseDate.value = ymd(new Date());
 
-    // 메모 로드
-    loadMemo();
-    const memo = $("memo");
-    if(memo) memo.addEventListener("input", saveMemo);
+    // 옵션 체크박스 초기화
+    const chk = $("showAllDaily");
+    if(chk){
+      chk.checked = getShowAllDaily();
+      chk.addEventListener("change", ()=>{
+        setShowAllDaily(chk.checked);
+        renderAll();
+      });
+    }
 
     try{
       const r = await fetch("/data/routines/templates.json");
@@ -333,59 +401,34 @@
     }catch(e){}
 
     RAW.templates = Array.isArray(RAW.templates) ? RAW.templates : [];
+
     const updatedPill = $("updatedPill");
     if(updatedPill) updatedPill.textContent = `updated: ${RAW.updated || "-"}`;
 
     collectTags();
     renderTags();
-    renderList();
+    syncDailyOptUI();
+    renderAll();
   }
 
-  // 필드 이벤트 (없어도 안 터지게)
-  const baseDate = $("baseDate");
-  const mode = $("mode");
-  const q = $("q");
-  const resetBtn = $("resetBtn");
+  // 이벤트
+  $("baseDate")?.addEventListener("change", renderAll);
+  $("mode")?.addEventListener("change", ()=>{ syncDailyOptUI(); renderAll(); });
+  $("q")?.addEventListener("input", renderAll);
 
-  if(baseDate) baseDate.addEventListener("change", renderList);
-  if(mode) mode.addEventListener("change", renderList);
-  if(q) q.addEventListener("input", renderList);
+  $("resetBtn")?.addEventListener("click", ()=>{
+    $("baseDate").value = ymd(new Date());
+    $("mode").value = "auto";
+    $("q").value = "";
+    ACTIVE_TAG = "";
+    renderTags();
 
-  if(resetBtn){
-    resetBtn.addEventListener("click", ()=>{
-      if(baseDate) baseDate.value = ymd(new Date());
-      if(mode) mode.value = "auto";
-      if(q) q.value = "";
-      ACTIVE_TAG = "";
-      renderTags();
-      renderList();
-    });
-  }
+    // 옵션은 "초기화"에서 그대로 유지(업무 취향 설정으로 보고 유지)
+    // 필요하면 여기서 setShowAllDaily(false); $("showAllDaily").checked=false; 도 가능
 
-  const copyMemoBtn = $("copyMemo");
-  const clearMemoBtn = $("clearMemo");
-
-  if(copyMemoBtn){
-    copyMemoBtn.addEventListener("click", async ()=>{
-      const memo = $("memo");
-      const txt = memo ? (memo.value || "") : "";
-      try{
-        await navigator.clipboard.writeText(txt);
-        copyMemoBtn.textContent = "복사됨";
-        setTimeout(()=>copyMemoBtn.textContent="메모 복사", 900);
-      }catch(e){
-        alert("클립보드 복사 실패: 브라우저 권한을 확인하세요.");
-      }
-    });
-  }
-
-  if(clearMemoBtn){
-    clearMemoBtn.addEventListener("click", ()=>{
-      const memo = $("memo");
-      if(memo) memo.value = "";
-      try{ localStorage.removeItem(MEMO_KEY); }catch(e){}
-    });
-  }
+    syncDailyOptUI();
+    renderAll();
+  });
 
   init();
 })();
