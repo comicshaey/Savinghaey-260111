@@ -160,6 +160,55 @@
       font-size:.9rem;
       text-align:center;
     }
+
+
+    /* =============================
+   Dashboard hotfix (공통CSS 충돌 방지)
+   ============================= */
+
+/* 카드 헤더를 "타이틀 위 / 칩 아래" 세로 구조로 고정 */
+.card-head{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:flex-start;
+  gap:10px;
+}
+
+/* 메타(칩 묶음)는 무조건 왼쪽 정렬 + 자연 줄바꿈 */
+.meta{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:flex-start !important;
+  align-items:flex-start;
+  gap:6px;
+  width:100%;
+}
+
+/* 칩이 타이틀 옆으로 올라가 붙는 현상 방지 */
+.title{ width:100%; }
+
+/* 공통CSS가 span 폰트를 키우는 문제를 여기서 눌러버림 */
+.meta .chip{
+  font-size:0.85rem !important;
+  line-height:1.2 !important;
+  white-space:normal;
+}
+
+/* 칩 내부 글자(긴 내용) 때문에 레이아웃 터지면 줄바꿈 */
+.meta .chip{
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+/* 메모는 줄바꿈 유지 */
+.desc.white-pre,
+.task-memo{
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+
   </style>
 </head>
 
