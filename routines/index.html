@@ -25,7 +25,7 @@
     ul.chk li{margin:6px 0}
     .hint{color:#666;font-size:.95rem;margin-top:8px;line-height:1.55}
     .noteBox{border:1px dashed #d1d5db;border-radius:12px;padding:10px 12px;background:#fafafa;margin-top:10px}
-    textarea{width:100%;min-height:88px}
+    textarea{width:100%;min-height:110px}
   </style>
 </head>
 
@@ -77,13 +77,31 @@
       <span class="pill">데이터: <span style="font-weight:900">/data/routines/templates.json</span></span>
       <span class="pill" id="updatedPill">updated: -</span>
     </div>
-
   </section>
 
   <div id="list"></div>
 
+  <!-- ✅ 여기(메모 영역)가 빠지면 append/copyMemo/clearMemo가 터집니다 -->
+  <section class="section" style="margin-top:18px;">
+    <h2 class="local-h2" style="margin:0 0 10px;">메모</h2>
+    <div class="noteBox">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+        <div class="muted" style="font-size:.95rem;">
+          · “메모에 추가”로 누적 / 필요하면 전체 복사해서 보고·결재문 초안에 붙이기
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-mini" id="copyMemo" type="button">메모 복사</button>
+          <button class="btn-mini" id="clearMemo" type="button">메모 비우기</button>
+        </div>
+      </div>
+      <div style="margin-top:10px;">
+        <textarea id="memo" placeholder="여기에 메모가 쌓입니다. (브라우저 로컬에 자동 저장됨)"></textarea>
+        <div class="hint">※ 이 메모는 같은 브라우저/PC에서는 자동 저장됩니다(로컬스토리지).</div>
+      </div>
+    </div>
+  </section>
 
-  <footer class="site-footer" style="text-align:center;">
+  <footer class="site-footer" style="text-align:center; margin-top:18px;">
     제작·운영: 씩씩하고 귀여운 고주무관 · 질병코드 G47.4 기면병 및 탈력발작 · 너넨 기면증 없지? 메롱메롱
   </footer>
 </main>
@@ -108,8 +126,12 @@
   let ACTIVE_TAG = ""; // roles 태그
   let TAGS = [];
 
+  // 메모 로컬 저장 키
+  const MEMO_KEY = "routines_memo_v1";
+
   function parseBaseDate(){
-    const v = $("baseDate").value;
+    const el = $("baseDate");
+    const v = el ? el.value : "";
     if(!v){
       const t = new Date();
       return new Date(t.getFullYear(), t.getMonth(), t.getDate());
@@ -148,6 +170,8 @@
 
   function renderTags(){
     const box = $("tagbox");
+    if(!box) return;
+
     if(!TAGS.length){
       box.innerHTML = `<span class="muted">태그 없음</span>`;
       return;
@@ -172,8 +196,10 @@
 
   function matchTpl(tpl){
     const d = parseBaseDate();
-    const mode = $("mode").value;
-    const q = norm($("q").value);
+    const modeEl = $("mode");
+    const qEl = $("q");
+    const mode = modeEl ? modeEl.value : "auto";
+    const q = norm(qEl ? qEl.value : "");
 
     // mode 필터
     let ok = true;
@@ -206,12 +232,31 @@
     return `${head}\n${items}`;
   }
 
+  function saveMemo(){
+    const memo = $("memo");
+    if(!memo) return;
+    try{
+      localStorage.setItem(MEMO_KEY, memo.value || "");
+    }catch(e){}
+  }
+
+  function loadMemo(){
+    const memo = $("memo");
+    if(!memo) return;
+    try{
+      memo.value = localStorage.getItem(MEMO_KEY) || "";
+    }catch(e){}
+  }
+
   function renderList(){
     const d = parseBaseDate();
     const list = $("list");
+    if(!list) return;
+
     const filtered = RAW.templates.filter(matchTpl);
 
-    $("countPill").innerHTML = `<b>${filtered.length}</b>건`;
+    const countPill = $("countPill");
+    if(countPill) countPill.innerHTML = `<b>${filtered.length}</b>건`;
 
     if(!filtered.length){
       list.innerHTML = `<div class="card"><p class="muted">조건에 해당하는 루틴이 없습니다. (날짜/모드/태그 확인)</p></div>`;
@@ -261,15 +306,26 @@
       b.addEventListener("click", ()=>{
         const txt = b.getAttribute("data-append") || "";
         const memo = $("memo");
+        if(!memo){
+          alert("메모 영역(#memo)이 없습니다. 메모 섹션이 삭제됐는지 확인하세요.");
+          return;
+        }
         memo.value = (memo.value ? memo.value + "\n\n" : "") + txt;
         memo.focus();
+        saveMemo();
       });
     });
   }
 
   async function init(){
     // 기준일 기본: 오늘
-    $("baseDate").value = ymd(new Date());
+    const baseDate = $("baseDate");
+    if(baseDate) baseDate.value = ymd(new Date());
+
+    // 메모 로드
+    loadMemo();
+    const memo = $("memo");
+    if(memo) memo.addEventListener("input", saveMemo);
 
     try{
       const r = await fetch("/data/routines/templates.json");
@@ -277,36 +333,59 @@
     }catch(e){}
 
     RAW.templates = Array.isArray(RAW.templates) ? RAW.templates : [];
-    $("updatedPill").textContent = `updated: ${RAW.updated || "-"}`;
+    const updatedPill = $("updatedPill");
+    if(updatedPill) updatedPill.textContent = `updated: ${RAW.updated || "-"}`;
 
     collectTags();
     renderTags();
     renderList();
   }
 
-  $("baseDate").addEventListener("change", renderList);
-  $("mode").addEventListener("change", renderList);
-  $("q").addEventListener("input", renderList);
+  // 필드 이벤트 (없어도 안 터지게)
+  const baseDate = $("baseDate");
+  const mode = $("mode");
+  const q = $("q");
+  const resetBtn = $("resetBtn");
 
-  $("resetBtn").addEventListener("click", ()=>{
-    $("baseDate").value = ymd(new Date());
-    $("mode").value = "auto";
-    $("q").value = "";
-    ACTIVE_TAG = "";
-    renderTags();
-    renderList();
-  });
+  if(baseDate) baseDate.addEventListener("change", renderList);
+  if(mode) mode.addEventListener("change", renderList);
+  if(q) q.addEventListener("input", renderList);
 
-  $("copyMemo").addEventListener("click", async ()=>{
-    try{
-      await navigator.clipboard.writeText($("memo").value || "");
-      $("copyMemo").textContent = "복사됨";
-      setTimeout(()=>$("copyMemo").textContent="메모 복사", 900);
-    }catch(e){
-      alert("클립보드 복사 실패: 브라우저 권한을 확인하세요.");
-    }
-  });
-  $("clearMemo").addEventListener("click", ()=>{$("memo").value="";});
+  if(resetBtn){
+    resetBtn.addEventListener("click", ()=>{
+      if(baseDate) baseDate.value = ymd(new Date());
+      if(mode) mode.value = "auto";
+      if(q) q.value = "";
+      ACTIVE_TAG = "";
+      renderTags();
+      renderList();
+    });
+  }
+
+  const copyMemoBtn = $("copyMemo");
+  const clearMemoBtn = $("clearMemo");
+
+  if(copyMemoBtn){
+    copyMemoBtn.addEventListener("click", async ()=>{
+      const memo = $("memo");
+      const txt = memo ? (memo.value || "") : "";
+      try{
+        await navigator.clipboard.writeText(txt);
+        copyMemoBtn.textContent = "복사됨";
+        setTimeout(()=>copyMemoBtn.textContent="메모 복사", 900);
+      }catch(e){
+        alert("클립보드 복사 실패: 브라우저 권한을 확인하세요.");
+      }
+    });
+  }
+
+  if(clearMemoBtn){
+    clearMemoBtn.addEventListener("click", ()=>{
+      const memo = $("memo");
+      if(memo) memo.value = "";
+      try{ localStorage.removeItem(MEMO_KEY); }catch(e){}
+    });
+  }
 
   init();
 })();
