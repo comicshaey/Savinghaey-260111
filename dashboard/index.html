@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>마감 임박 대시보드</title>
+  <title>마감 임박 업무 목록</title>
 
   <link rel="icon" href="/static/favicon.ico" />
   <link rel="stylesheet" href="/static/style.css" />
@@ -72,7 +72,7 @@
     }
     .btn:hover{background:#f3f4f6;}
     .btn.primary{background:#111; color:#fff;}
-    .btn.primary:hover{background:#000;}
+    .btn.primary:hover{background݈:#000;}
     .btn + .btn{margin-left:8px;}
 
     .controls{
@@ -97,42 +97,68 @@
       padding:14px 14px 12px;
       background:#fafafa;
     }
+
+    /* =============================
+       Dashboard hotfix (공통CSS 충돌 방지)
+       ============================= */
+
+    /* 카드 헤더: 무조건 세로 (타이틀 위 / 칩 아래) */
     .card-head{
       display:flex;
-      gap:10px;
+      flex-direction:column;
       align-items:flex-start;
-      justify-content:space-between;
-      flex-wrap:wrap;
+      justify-content:flex-start;
+      gap:10px;
       margin-bottom:8px;
     }
+
+    /* 타이틀은 한 줄 영역을 확실히 확보 */
     .title{
+      width:100%;
       font-weight:800;
       color:#111;
       font-size:1.05rem;
       line-height:1.35;
     }
+
+    /* 칩 묶음: 왼쪽정렬 + 자연 줄바꿈 + 전체폭 */
     .meta{
+      width:100%;
       display:flex;
       flex-wrap:wrap;
+      justify-content:flex-start !important;
+      align-items:flex-start;
       gap:6px;
-      align-items:center;
-      justify-content:flex-end;
     }
+
+    /* 칩: 공통CSS(body span) 영향 차단 */
     .chip{
-      display:inline-block;
+      display:inline-flex;
+      align-items:center;
       padding:4px 8px;
       border-radius:999px;
       background:#fff;
       border:1px solid #e6e6e6;
-      font-size:0.85rem;
+      font-size:0.85rem !important;
+      line-height:1.2 !important;
       color:#333;
+      white-space:normal;
+      max-width:100%;
+      overflow-wrap:anywhere;
+      word-break:break-word;
     }
+
+    /* 모바일에서 칩이 타이틀 옆에 억지로 붙는 느낌 방지 */
+    @media (max-width: 640px){
+      .chip{ flex: 0 1 auto; }
+    }
+
     .chip.due-danger{border-color:rgba(200,53,45,.35); color:var(--danger); font-weight:800;}
     .chip.due-warn{border-color:rgba(180,83,9,.35); color:var(--warn); font-weight:800;}
     .chip.due-ok{border-color:rgba(15,118,110,.35); color:var(--ok); font-weight:800;}
     .chip.due-late{border-color:rgba(124,58,237,.35); color:var(--late); font-weight:800;}
 
-    /* 줄바꿈 유지 */
+    /* 메모 줄바꿈 유지 */
     .white-pre{
       white-space: pre-wrap;
       overflow-wrap:anywhere;
@@ -160,55 +186,6 @@
       font-size:.9rem;
       text-align:center;
     }
-
-
-    /* =============================
-   Dashboard hotfix (공통CSS 충돌 방지)
-   ============================= */
-
-/* 카드 헤더를 "타이틀 위 / 칩 아래" 세로 구조로 고정 */
-.card-head{
-  display:flex;
-  flex-direction:column;
-  align-items:flex-start;
-  justify-content:flex-start;
-  gap:10px;
-}
-
-/* 메타(칩 묶음)는 무조건 왼쪽 정렬 + 자연 줄바꿈 */
-.meta{
-  display:flex;
-  flex-wrap:wrap;
-  justify-content:flex-start !important;
-  align-items:flex-start;
-  gap:6px;
-  width:100%;
-}
-
-/* 칩이 타이틀 옆으로 올라가 붙는 현상 방지 */
-.title{ width:100%; }
-
-/* 공통CSS가 span 폰트를 키우는 문제를 여기서 눌러버림 */
-.meta .chip{
-  font-size:0.85rem !important;
-  line-height:1.2 !important;
-  white-space:normal;
-}
-
-/* 칩 내부 글자(긴 내용) 때문에 레이아웃 터지면 줄바꿈 */
-.meta .chip{
-  max-width:100%;
-  overflow-wrap:anywhere;
-  word-break:break-word;
-}
-
-/* 메모는 줄바꿈 유지 */
-.desc.white-pre,
-.task-memo{
-  white-space:pre-wrap;
-  overflow-wrap:anywhere;
-}
-
   </style>
 </head>
 
@@ -268,9 +245,9 @@
     // =========================
     //  설정
     // =========================
-    const TASKS_DIR = "/data/tasks/"; 
-    const FILE_DAY = 3; 
-    const MAX_LOAD_MONTHS_AHEAD = 6;   // 현재~다음 6개월 파일까지 로드
+    const TASKS_DIR = "/data/tasks/";
+    const FILE_DAY = 3;
+    const MAX_LOAD_MONTHS_AHEAD = 6;
 
     // =========================
     //  유틸
@@ -303,7 +280,6 @@
         const d = addMonths(baseDate, i);
         set.add(quarterStartKeyByDate(d));
       }
-      // 과거 분기 파일(기한넘김 표시용)도 1개는 같이 읽기
       set.add(quarterStartKeyByDate(addMonths(baseDate, -3)));
       return [...set];
     }
@@ -318,7 +294,7 @@
     }
 
     function dueClass(diffDays){
-      if(diffDays < 0) return "due-late";   //  기한 넘김은 별도 색
+      if(diffDays < 0) return "due-late";
       if(diffDays <= 1) return "due-danger";
       if(diffDays <= 7) return "due-warn";
       return "due-ok";
@@ -361,8 +337,12 @@
       root.innerHTML = "";
 
       const base = startOfDay(baseDate);
-      const lower = (rangeDays === 0) ? base : startOfDay(addDays(base, -rangeDays));
-      const upper = (rangeDays === 0) ? base : startOfDay(addDays(base,  rangeDays));
+
+      // rangeDays=0이면 "전체보기"라면서 사실상 기준일만 보여주는 게 애매해서:
+      // 전체보기 = 모든 due를 보여주되, 정렬만 기준일 기반으로 한다는 식으로 가려면 아래 로직 바꿔야 함.
+      // 네가 의도한 게 "전후 N일"이면 지금 로직 유지.
+      const lower = (rangeDays === 0) ? new Date(1970,0,1) : startOfDay(addDays(base, -rangeDays));
+      const upper = (rangeDays === 0) ? new Date(2100,0,1) : startOfDay(addDays(base,  rangeDays));
 
       const filtered = (tasks||[])
         .map(t => ({ ...t, _due: parseYmd(t.due) }))
