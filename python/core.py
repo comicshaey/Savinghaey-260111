@@ -1,13 +1,12 @@
 # core.py
-# 연차유급휴가 계산 핵심 로직 (규정 구현체)
+# 교육공무직 연차유급휴가 계산 핵심 로직 (최종 코어)
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 import math
-import re
-from typing import Optional, Dict
 import pandas as pd
 from openpyxl import load_workbook
+from typing import Optional, Dict
 
 
 # =========================
@@ -44,8 +43,8 @@ def safe_float(x) -> float:
 class Employee:
     name: str
     first_hire_date: date
-    period_type: str     # SCHOOL_YEAR / CALENDAR_YEAR
-    schedule_key: str    # 분모 키
+    period_type: str        # SCHOOL_YEAR / CALENDAR_YEAR
+    schedule_key: str       # 분모 키
 
 
 @dataclass
@@ -102,9 +101,9 @@ def read_worklog(xlsx_path: str) -> pd.DataFrame:
             colmap[c] = "work_date"
         elif cc in ("근무상황", "근태"):
             colmap[c] = "status"
-        elif cc in ("시작일자",):
+        elif cc == "시작일자":
             colmap[c] = "start_date"
-        elif cc in ("종료일자",):
+        elif cc == "종료일자":
             colmap[c] = "end_date"
         elif cc in ("일수", "사용일수"):
             colmap[c] = "days"
@@ -124,7 +123,7 @@ def read_worklog(xlsx_path: str) -> pd.DataFrame:
 
 
 # =========================
-# 출근 / 차감 규칙 (임시)
+# 출근 / 차감 규칙
 # =========================
 
 NON_ATTEND = ["결근", "무급", "무단", "휴직"]
@@ -151,6 +150,27 @@ def calc_non_attend_days(df: pd.DataFrame, period: Period) -> float:
     return total
 
 
+def breakdown_non_attend_by_status(df: pd.DataFrame, period: Period) -> pd.DataFrame:
+    rows = []
+    for _, r in df.iterrows():
+        if not is_non_attend(str(r["status"])):
+            continue
+        d = r["work_date"]
+        if d and period.start <= d <= period.end:
+            rows.append({
+                "근무상황": r["status"],
+                "일수": r["days"] if r["days"] else 1.0
+            })
+    if not rows:
+        return pd.DataFrame(columns=["근무상황", "일수"])
+    return (
+        pd.DataFrame(rows)
+        .groupby("근무상황", as_index=False)["일수"]
+        .sum()
+        .sort_values("일수", ascending=False)
+    )
+
+
 # =========================
 # 연차 계산
 # =========================
@@ -169,25 +189,19 @@ def normal_entitlement(first_hire: date, grant_year: int) -> float:
     return min(25, 15 + (y - 1) // 2)
 
 
-def calculate_annual_leave(
-    emp: Employee,
-    worklog: pd.DataFrame,
-    grant_year: int
-) -> dict:
-
+def calculate_annual_leave(emp: Employee, worklog: pd.DataFrame, grant_year: int) -> dict:
     period = get_period(grant_year, emp.period_type)
     denom = scheduled_work_days(emp.schedule_key)
     non_att = calc_non_attend_days(worklog, period)
 
     attend_rate = max(0.0, (denom - non_att) / denom)
     normal = normal_entitlement(emp.first_hire_date, grant_year)
-
     granted = normal if attend_rate >= 0.8 else round(normal * attend_rate, 2)
 
     return {
         "기준기간": f"{period.start} ~ {period.end}",
-        "분모": denom,
-        "차감": non_att,
-        "출근율": round(attend_rate * 100, 2),
-        "부여일수": granted,
+        "소정근로일수": denom,
+        "차감일수": non_att,
+        "출근율(%)": round(attend_rate * 100, 2),
+        "부여연차": granted,
     }
