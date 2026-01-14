@@ -2,3 +2,17 @@ pip install pyinstaller pandas openpyxl
 
 pyinstaller --onefile --noconsole --name "고해영 천재" geniushaey_tk.py
 
+
+
+granted = normal if is_over_80 else round(normal * attend_rate, 2)
+
+
+raw = normal if is_over_80 else (normal * attend_rate)
+granted = round(raw, 1)
+
+
+"80% 미만이라 비례부여(정상부여×출근율) 적용."
+
+"80% 미만으로 정상부여일수에 출근율을 곱해 산출 후, 소수점 첫째 자리까지 반올림하여 부여."
+
+
